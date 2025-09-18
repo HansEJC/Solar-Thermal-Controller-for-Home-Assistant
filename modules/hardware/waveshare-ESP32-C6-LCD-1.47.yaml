@@ -1,0 +1,104 @@
+#Updated from https://community.home-assistant.io/t/help-needed-to-get-this-tiny-screen-working-esp32-c6-1-47in-display/800102/39?page=2
+substitutions:
+  id: esp32c6_lcd
+
+esp32:
+  board: esp32-c6-devkitc-1
+  variant: esp32c6
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+    #version: 5.3.1
+    version: recommended
+    #platform_version: 6.9.0
+    sdkconfig_options:
+      CONFIG_ESPTOOLPY_FLASHSIZE_DETECT: y
+      CONFIG_ESPTOOLPY_FLASHSIZE_4MB: y
+      CONFIG_OPENTHREAD_ENABLED: n
+      CONFIG_USE_MINIMAL_MDNS: y
+      # Memory optimization
+      COMPILER_OPTIMIZATION_SIZE: y
+      COMPILER_OPTIMIZATION_LEVEL_RELEASE: y
+      CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE: y
+      CONFIG_HEAP_POISONING_DISABLED: y
+
+#i2c:
+#  - id: bus_a
+#    sda: GPIO1
+#    scl: GPIO2
+#    scan: False
+
+spi:
+  - id: sd_display
+    clk_pin: GPIO7
+    miso_pin: GPIO5
+    mosi_pin: GPIO6
+    # --- Second SPI bus for MAX31865 modules (PT1000 sensors) ---
+  - id: max31865_spi
+    clk_pin: GPIO0
+    mosi_pin: GPIO1
+    miso_pin: GPIO2  
+
+one_wire:
+#  - pin: GPIO10
+  - pin: GPIO3
+    platform: gpio
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+    id: "${id}_status"
+    icon: mdi:check-network
+    entity_category: diagnostic
+
+button:
+  - platform: safe_mode
+    name: "(Safe Mode)"
+    icon: mdi:restart-alert
+    id: "${id}_safe_mode"
+    entity_category: config
+    disabled_by_default: True
+  - platform: restart
+    name: "Restart"
+    icon: mdi:restart
+    id: "${id}_restart"
+    # entity_category: diagnostic
+    disabled_by_default: True
+  - platform: shutdown
+    name: "Shutdown"
+    id: "${id}_shutdown"
+    # entity_category: diagnostic
+    disabled_by_default: True
+
+output:
+  - platform: ledc
+    pin: GPIO22
+    id: lcd_backlight
+    frequency: 1000 Hz
+
+light:
+  - platform: monochromatic
+    output: lcd_backlight
+    name: "Backlight"
+    id: backlight_light
+    restore_mode: ALWAYS_ON
+    # RGB LED
+  - platform: esp32_rmt_led_strip
+    id: "${id}_led"
+    name: "Led"
+    rgb_order: RGB
+    pin: GPIO8
+    num_leds: 1
+    chipset: SK6812
+
+display:
+  - platform: st7789v
+    spi_id: sd_display
+    cs_pin: GPIO14
+    dc_pin:
+      number: GPIO15
+      ignore_strapping_warning: true
+    reset_pin: GPIO21
+    model: Waveshare 1.47in 172X320
+    id: main_display
+    rotation: 90

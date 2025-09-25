@@ -18,12 +18,12 @@ esphome:
     priority: -10
     then:
       - lambda: |-
-          id(collector_min).publish_state(30.0);   // high start value
-          id(collector_max).publish_state(10.0);  // low start value
-          id(tank_top_temp_min).publish_state(50.0);   // high start value
-          id(tank_top_temp_max).publish_state(40.0);  // low start value
-          id(tank_bottom_temp_min).publish_state(30.0);   // high start value
-          id(tank_bottom_temp_max).publish_state(10.0);  // low start value
+          id(collector_min).publish_state(6.7);   // high start value initially 30
+          id(collector_max).publish_state(90.6);  // low start value initially 10
+          id(tank_top_temp_min).publish_state(37.3);   // high start value initially 50
+          id(tank_top_temp_max).publish_state(61.2);  // low start value initially 40
+          id(tank_bottom_temp_min).publish_state(17.4);   // high start value initially 30
+          id(tank_bottom_temp_max).publish_state(48.5);  // low start value initially 10
 
 # Enable logging
 logger:
@@ -290,19 +290,31 @@ interval:
           text: !lambda |-
               return str_sprintf("Min %.1f\u00B0C ", id(tank_bottom_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_bottom_temp_max).state);
 
+# 24/09/25 - Changed from 7.0 to 6.0 temp for on and added delay pump off
 # --- Pump control logic ---
   - interval: 10s
     then:
+      - if:
+          condition:
+            lambda: |-
+              return (id(collector_temp).state - id(tank_bottom_temp).state > 6.0) && id(tank_top_temp).state < 65.0;
+          then:
+            - switch.turn_on: solar_pump
+      - if:
+          condition:
+            and:
+              - lambda: |-
+                  return (id(collector_temp).state - id(tank_bottom_temp).state < 3.0) || id(tank_top_temp).state >= 65.0;
+              - for:
+                  time: 40s
+                  condition:
+                    switch.is_on: solar_pump
+          then:
+            - switch.turn_off: solar_pump
       - lambda: |-
           float tank_top = id(tank_top_temp).state;
           float solar_panel = id(collector_temp).state;
           float tank_bottom = id(tank_bottom_temp).state;
-          if (solar_panel - tank_bottom > 7.0 && tank_top < 65.0) {
-            id(solar_pump).turn_on();
-          } else if (solar_panel - tank_bottom < 3.0 || tank_top >= 65.0) {
-            id(solar_pump).turn_off();
-          }           
-
           if (solar_panel > id(collector_max).state) {
             id(collector_max).publish_state(solar_panel);
           }

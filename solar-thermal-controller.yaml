@@ -27,6 +27,9 @@ esphome:
 
 # Enable logging
 logger:
+  level: DEBUG #level and logs temp to find buffer issues
+  logs:
+    api: DEBUG
 
 # Enable Home Assistant API
 api:
@@ -40,6 +43,7 @@ api:
   # Only enable BLE tracking when wifi is up and api is connected
   # Gives devices time to manage wifi and authenticate with api
   on_client_connected:
+    - delay: 11s
     - esp32_ble_tracker.start_scan:
        continuous: true
   # Disable BLE tracking when there are no api connections live
@@ -338,32 +342,37 @@ lvgl:
             y: 75
 
 interval:
-  - interval: 1s
-    then:
-      - lvgl.label.update:
-          id: collector_label
-          text: !lambda |-
-            return str_sprintf("\U000F1A73 %.1f\u00B0C", id(collector_temp).state);
-      - lvgl.label.update:
-          id: collector_minmax_label
-          text: !lambda |-
-              return str_sprintf("Min %.1f\u00B0C ", id(collector_min).state) + str_sprintf("Max %.1f\u00B0C ", id(collector_max).state);
-      - lvgl.label.update:
-          id: tank_top_label
-          text: !lambda |-
-            return str_sprintf("Tank \U000F0739 %.1f\u00B0C", id(tank_top_temp).state);
-      - lvgl.label.update:
-          id: tank_top_minmax_label
-          text: !lambda |-
-              return str_sprintf("Min %.1f\u00B0C ", id(tank_top_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_top_temp_max).state);
-      - lvgl.label.update:
-          id: tank_bottom_label
-          text: !lambda |-
-            return str_sprintf("Tank \U000F0730 %.1f\u00B0C", id(tank_bottom_temp).state);
-      - lvgl.label.update:
-          id: tank_bottom_minmax_label
-          text: !lambda |-
-              return str_sprintf("Min %.1f\u00B0C ", id(tank_bottom_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_bottom_temp_max).state);
+  - interval: 3s   
+    then: 
+      - if:
+          condition: 
+            and: 
+              - light.is_on: backlight_light
+          then:
+            - lvgl.label.update:
+                id: collector_label
+                text: !lambda |-
+                  return str_sprintf("\U000F1A73 %.1f\u00B0C", id(collector_temp).state);
+            - lvgl.label.update:
+                id: collector_minmax_label
+                text: !lambda |-
+                    return str_sprintf("Min %.1f\u00B0C ", id(collector_min).state) + str_sprintf("Max %.1f\u00B0C ", id(collector_max).state);
+            - lvgl.label.update:
+                id: tank_top_label
+                text: !lambda |-
+                  return str_sprintf("Tank \U000F0739 %.1f\u00B0C", id(tank_top_temp).state);
+            - lvgl.label.update:
+                id: tank_top_minmax_label
+                text: !lambda |-
+                    return str_sprintf("Min %.1f\u00B0C ", id(tank_top_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_top_temp_max).state);
+            - lvgl.label.update:
+                id: tank_bottom_label
+                text: !lambda |-
+                  return str_sprintf("Tank \U000F0730 %.1f\u00B0C", id(tank_bottom_temp).state);
+            - lvgl.label.update:
+                id: tank_bottom_minmax_label
+                text: !lambda |-
+                    return str_sprintf("Min %.1f\u00B0C ", id(tank_bottom_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_bottom_temp_max).state);
 
 # --- Pump control logic ---
   - interval: 10s

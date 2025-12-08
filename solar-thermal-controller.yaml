@@ -42,18 +42,18 @@ api:
   
   # Only enable BLE tracking when wifi is up and api is connected
   # Gives devices time to manage wifi and authenticate with api
-  on_client_connected:
-    - delay: 11s
-    - esp32_ble_tracker.start_scan:
-       continuous: true
+  #on_client_connected:
+  #  - delay: 11s
+  #  - esp32_ble_tracker.start_scan:
+  #     continuous: true
   # Disable BLE tracking when there are no api connections live
-  on_client_disconnected:
-    if:
-      condition:
-        not:
-          api.connected:
-      then:
-        - esp32_ble_tracker.stop_scan:
+  #on_client_disconnected:
+  #  if:
+  #    condition:
+  #      not:
+  #        api.connected:
+  #    then:
+  #      - esp32_ble_tracker.stop_scan:
 
 ota:
   - platform: esphome
@@ -127,25 +127,16 @@ sensor:
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: collector_min
-    filters:
-      - delta: 0.1
-      - throttle: 5min
   - platform: template
     name: "DHW Top Min"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_top_temp_min
-    filters:
-      - delta: 0.1
-      - throttle: 5min
   - platform: template
     name: "DHW Bottom Min"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_bottom_temp_min
-    filters:
-      - delta: 0.1
-      - throttle: 5min
 
    # A template sensor to store the maximum value
   - platform: template
@@ -153,25 +144,16 @@ sensor:
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: collector_max
-    filters:
-      - delta: 0.1
-      - throttle: 5min
   - platform: template
     name: "DHW Top Max"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_top_temp_max
-    filters:
-      - delta: 0.1
-      - throttle: 5min
   - platform: template
     name: "DHW Bottom Max"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_bottom_temp_max
-    filters:
-      - delta: 0.1
-      - throttle: 5min
   
     #https://esphome.io/components/sensor/dallas_temp/
   - platform: dallas_temp
@@ -220,12 +202,12 @@ sensor:
       - delta: 0.1
       - throttle: 10s
     
-#  - platform: uptime
+  - platform: uptime
     # The uptime sensor is extremely helpful to know if your device is rebooting
     # when it shouldn't be. This might indicate your interval-to-window timing is
     # too tight, and the window needs to be reduced.
-#    name: "Uptime Sensor"
-#    update_interval: 60s
+    name: "Uptime Sensor"
+    update_interval: 60s
 
 binary_sensor:
   - platform: homeassistant
@@ -440,12 +422,13 @@ font:
           "\U000F0730", # down
           ]
 
-esp32_ble_tracker:
-  scan_parameters:
+#Removed as might be causing issues
+#esp32_ble_tracker:
+#  scan_parameters:
     # Don't auto start BLE scanning, we control it in the `api` block's automation.
-    continuous: False
-    interval: 320ms #inscreased to 320ms from 211ms
-    window: 30ms #reduced to 30ms from 120ms
-    active: true
+#    continuous: False
+#    interval: 320ms #inscreased to 320ms from 211ms
+#    window: 30ms #reduced to 30ms from 120ms
+#    active: true
 
-bluetooth_proxy:
+#bluetooth_proxy:

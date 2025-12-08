@@ -18,11 +18,11 @@ esphome:
     priority: -10
     then:
       - lambda: |-
-          id(collector_min).publish_state(6.7);   // high start value initially 30
+          id(collector_min).publish_state(0.3);   // high start value initially 30
           id(collector_max).publish_state(90.6);  // low start value initially 10
-          id(tank_top_temp_min).publish_state(37.3);   // high start value initially 50
+          id(tank_top_temp_min).publish_state(11.0);   // high start value initially 50
           id(tank_top_temp_max).publish_state(61.2);  // low start value initially 40
-          id(tank_bottom_temp_min).publish_state(17.4);   // high start value initially 30
+          id(tank_bottom_temp_min).publish_state(9.1);   // high start value initially 30
           id(tank_bottom_temp_max).publish_state(48.5);  // low start value initially 10
 
 # Enable logging
@@ -32,6 +32,24 @@ logger:
 api:
   encryption:
     key: "6MD8R8i8BYzVSQnshvHmuoe3kpOepQrlqdiay0yRY7A="
+  
+  # Add these two for queue + connection resilience
+  max_send_queue: 32  # Was default 8 → now handles more bursts (e.g., 5–6 sensor updates at once)
+  max_connections: 10  # Slight bump from 8; safe for C6, covers HA + 1–2 debug tools
+  
+  # Only enable BLE tracking when wifi is up and api is connected
+  # Gives devices time to manage wifi and authenticate with api
+  on_client_connected:
+    - esp32_ble_tracker.start_scan:
+       continuous: true
+  # Disable BLE tracking when there are no api connections live
+  on_client_disconnected:
+    if:
+      condition:
+        not:
+          api.connected:
+      then:
+        - esp32_ble_tracker.stop_scan:
 
 ota:
   - platform: esphome
@@ -39,7 +57,9 @@ ota:
 
 wifi:
   ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  password: !secret wifi_password  
+  fast_connect: true
+  output_power: 20dBm
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -60,24 +80,42 @@ sensor:
     spi_id: max31865_spi
     reference_resistance: 4300.0
     rtd_nominal_resistance: 1000.0
+    rtd_wires: 2
+    mains_filter: 50 Hz
     update_interval: 10s
     id: collector_temp
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
   - platform: max31865
     name: "DHW Top"
     cs_pin: GPIO19
     spi_id: max31865_spi
     reference_resistance: 4300.0
     rtd_nominal_resistance: 1000.0
+    rtd_wires: 2
+    mains_filter: 50 Hz
     update_interval: 10s
     id: tank_top_temp
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
   - platform: max31865
     name: "DHW Bottom"
     cs_pin: GPIO20
     spi_id: max31865_spi
     reference_resistance: 4300.0
     rtd_nominal_resistance: 1000.0
+    rtd_wires: 2    
+    mains_filter: 50 Hz
     update_interval: 10s
     id: tank_bottom_temp
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
 
    # A template sensor to store the maximum value
   - platform: template
@@ -85,16 +123,25 @@ sensor:
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: collector_min
+    filters:
+      - delta: 0.1
+      - throttle: 5min
   - platform: template
     name: "DHW Top Min"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_top_temp_min
+    filters:
+      - delta: 0.1
+      - throttle: 5min
   - platform: template
     name: "DHW Bottom Min"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_bottom_temp_min
+    filters:
+      - delta: 0.1
+      - throttle: 5min
 
    # A template sensor to store the maximum value
   - platform: template
@@ -102,16 +149,25 @@ sensor:
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: collector_max
+    filters:
+      - delta: 0.1
+      - throttle: 5min
   - platform: template
     name: "DHW Top Max"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_top_temp_max
+    filters:
+      - delta: 0.1
+      - throttle: 5min
   - platform: template
     name: "DHW Bottom Max"
     unit_of_measurement: "°C"
     device_class: "temperature"
     id: tank_bottom_temp_max
+    filters:
+      - delta: 0.1
+      - throttle: 5min
   
     #https://esphome.io/components/sensor/dallas_temp/
   - platform: dallas_temp
@@ -119,11 +175,19 @@ sensor:
     name: "Solar In"
     id: solar_in
     update_interval: 10s
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
   - platform: dallas_temp
     address: 0x70000000b4f16328
     name: "Solar Out"
     id: solar_out
     update_interval: 10s
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
          
     #ΔQ = m° Cp ΔT.
     #ΔQ = Rate of heat transfer (kW)
@@ -141,12 +205,23 @@ sensor:
       float cp = 4.184;
       float in = id(solar_in).state;
       float out = id(solar_out).state;
-      if (id(solar_pump).state) {
+      if (id(solar_pump).state && id(solar_in).state && id(solar_out).state) {
         return flow_rate * cp * (in - out);
       } else {
         return 0.0;
       }
     update_interval: 10s
+    filters:
+      - filter_out: nan
+      - delta: 0.1
+      - throttle: 10s
+    
+#  - platform: uptime
+    # The uptime sensor is extremely helpful to know if your device is rebooting
+    # when it shouldn't be. This might indicate your interval-to-window timing is
+    # too tight, and the window needs to be reduced.
+#    name: "Uptime Sensor"
+#    update_interval: 60s
 
 binary_sensor:
   - platform: homeassistant
@@ -209,7 +284,7 @@ switch:
 lvgl:
   - id: lvgl_display
     displays:
-      - main_display    
+      - main_display
     style_definitions:
       - id: temperature_style     
         text_font: roboto_icons_42
@@ -290,7 +365,6 @@ interval:
           text: !lambda |-
               return str_sprintf("Min %.1f\u00B0C ", id(tank_bottom_temp_min).state) + str_sprintf("Max %.1f\u00B0C ", id(tank_bottom_temp_max).state);
 
-# 24/09/25 - Changed from 7.0 to 6.0 temp for on and added delay pump off
 # --- Pump control logic ---
   - interval: 10s
     then:
@@ -304,7 +378,7 @@ interval:
           condition:
             and:
               - lambda: |-
-                  return (id(collector_temp).state - id(tank_bottom_temp).state < 3.0) || id(tank_top_temp).state >= 65.0;
+                  return (id(collector_temp).state - id(tank_bottom_temp).state < 2.0) || id(tank_top_temp).state >= 65.0;
               - for:
                   time: 40s
                   condition:
@@ -355,4 +429,14 @@ font:
           "\U000F1A73", # solar panel
           "\U000F0739", # up
           "\U000F0730", # down
-          ]      
+          ]
+
+esp32_ble_tracker:
+  scan_parameters:
+    # Don't auto start BLE scanning, we control it in the `api` block's automation.
+    continuous: False
+    interval: 320ms #inscreased to 320ms from 211ms
+    window: 30ms #reduced to 30ms from 120ms
+    active: true
+
+bluetooth_proxy:

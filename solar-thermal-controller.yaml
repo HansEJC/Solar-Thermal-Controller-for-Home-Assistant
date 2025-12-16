@@ -194,7 +194,7 @@ sensor:
       if (id(solar_pump).state && id(solar_in).state && id(solar_out).state) {
         return flow_rate * cp * (in - out);
       } else {
-        return 0.0;
+        return {};
       }
     update_interval: 10s
     filters:
@@ -230,8 +230,10 @@ switch:
     name: "Solar Pump"
     id: solar_pump
     icon: "mdi:pump"
-    restore_mode: ALWAYS_OFF
-
+    restore_mode: ALWAYS_OFF    
+    on_turn_off:
+      - lambda: |-          
+          id(kw_solar).publish_state(0.0);
   - platform: template
     name: Antiburn
     id: switch_antiburn

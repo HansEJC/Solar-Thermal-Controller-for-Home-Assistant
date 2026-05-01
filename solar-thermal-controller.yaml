@@ -11,25 +11,25 @@ esphome:
 #      - "-DI2C_NUM_1=I2C_NUM_0"
 #      - "-DBOARD_HAS_PSRAM"
 #      - "-Wl,-Map,output.map"
-    board_build.arduino.memory_type: qio_opi
+#    board_build.arduino.memory_type: qio_opi #removed as this ESP32 doens't have PSRAM
 #    platform_packages:
 #      - platformio/toolchain-xtensa-esp-elf @ 14.2.0+20241119
   on_boot:
     priority: -10
     then:
       - lambda: |-
-          id(collector_min).publish_state(0.3);   // high start value initially 30
-          id(collector_max).publish_state(90.6);  // low start value initially 10
-          id(tank_top_temp_min).publish_state(11.0);   // high start value initially 50
-          id(tank_top_temp_max).publish_state(61.2);  // low start value initially 40
-          id(tank_bottom_temp_min).publish_state(9.1);   // high start value initially 30
-          id(tank_bottom_temp_max).publish_state(48.5);  // low start value initially 10
+          id(collector_min).publish_state(-2.0);   // high start value initially 30
+          id(collector_max).publish_state(124.1);  // low start value initially 10
+          id(tank_top_temp_min).publish_state(10.2);  // high start value initially 50
+          id(tank_top_temp_max).publish_state(65.1);  // low start value initially 40
+          id(tank_bottom_temp_min).publish_state(6.7);   // high start value initially 30
+          id(tank_bottom_temp_max).publish_state(64.9);  // low start value initially 10
 
 # Enable logging
 logger:
-  level: DEBUG #level and logs temp to find buffer issues
-  logs:
-    api: DEBUG
+#  level: DEBUG #level and logs temp to find buffer issues
+#  logs:
+#    api: DEBUG
 
 # Enable Home Assistant API
 api:
@@ -187,6 +187,7 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
+      if (!id(solar_in).has_state() || !id(solar_out).has_state()) return 0.0;
       float flow_rate = 3.0 / 60.0; 
       float cp = 4.184;
       float in = id(solar_in).state;
@@ -194,12 +195,11 @@ sensor:
       if (id(solar_pump).state && id(solar_in).state && id(solar_out).state) {
         return flow_rate * cp * (in - out);
       } else {
-        return {};
+        return 0.0;
       }
     update_interval: 10s
     filters:
       - filter_out: nan
-      - delta: 0.1
       - throttle: 10s
     
   - platform: uptime
@@ -271,6 +271,7 @@ switch:
 
 lvgl:
   - id: lvgl_display
+    rotation: 90
     displays:
       - main_display
     style_definitions:
@@ -281,13 +282,14 @@ lvgl:
       - id: minmax_style     
         text_font: montserrat_16
         align: center
-        text_color: 0x800080 
-    disp_bg_color: 0x000000
-    buffer_size: 12%
+        text_color: 0x800080
+    bottom_layer:
+      bg_color: 0x000000
+    buffer_size: 25% #was 12% when trying to reduce ram for bluetooth stuff
     pages:
     - id: main_page 
       bg_color: 0x000000
-      bg_opa: transp
+      bg_opa: cover #was transp
       widgets:
         # Collector Gauge
         - label:
@@ -364,16 +366,16 @@ interval:
       - if:
           condition:
             lambda: |-
-              return (id(collector_temp).state - id(tank_bottom_temp).state > 6.0) && id(tank_top_temp).state < 65.0;
+              return (id(collector_temp).state - id(tank_bottom_temp).state > 6.0) && id(tank_top_temp).state < 75.0;
           then:
             - switch.turn_on: solar_pump
       - if:
           condition:
             and:
               - lambda: |-
-                  return (id(collector_temp).state - id(tank_bottom_temp).state < 2.0) || id(tank_top_temp).state >= 65.0;
+                  return ((id(collector_temp).state - id(tank_bottom_temp).state < 1.0) && (id(solar_in).state - id(solar_out).state < 0.5)) || id(tank_top_temp).state >= 75.0;
               - for:
-                  time: 40s
+                  time: 60s
                   condition:
                     switch.is_on: solar_pump
           then:
@@ -407,7 +409,7 @@ time:
       - seconds: 0,30
         then:
           - switch.turn_on: switch_antiburn
-      - seconds: 7,37
+      - seconds: 4,34
         then:
           - switch.turn_off: switch_antiburn
             

@@ -31,7 +31,9 @@ esp32:
 spi:
   - id: sd_display
     clk_pin: GPIO7
-    miso_pin: GPIO5
+    miso_pin:
+      number: GPIO5
+      ignore_strapping_warning: true
     mosi_pin: GPIO6
     # --- Second SPI bus for MAX31865 modules (PT1000 sensors) ---
   - id: max31865_spi
@@ -87,18 +89,27 @@ light:
     id: "${id}_led"
     name: "Led"
     rgb_order: RGB
-    pin: GPIO8
+    pin: 
+      number: GPIO8
+      ignore_strapping_warning: true
     num_leds: 1
     chipset: SK6812
 
 display:
-  - platform: st7789v
+  - platform: mipi_spi
+    id: main_display
+    model: ST7789V   # Use the base chip model as WAVESHARE-ESP32-C6-LCD-1.47 this model hasn't been updated to main branch yet
+    dimensions:
+      width: 172
+      height: 320
+      offset_width: 34    # Moved inside dimensions
+      offset_height: 0    # Moved inside dimensions
+    invert_colors: true
+    data_rate: 40MHz #added to reduce lvgl loop time. Apparently default is 20Mhz if not set 
     spi_id: sd_display
     cs_pin: GPIO14
     dc_pin:
       number: GPIO15
       ignore_strapping_warning: true
     reset_pin: GPIO21
-    model: Waveshare 1.47in 172X320
-    id: main_display
-    rotation: 90
+#    update_interval: never # If you don't set this to never, ESPHome will occasionally try to "refresh" the screen using its own engine, which interrupts LVGL and causes severe flickering or complete blackouts.

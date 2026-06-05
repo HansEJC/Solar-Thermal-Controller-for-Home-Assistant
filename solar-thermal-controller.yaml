@@ -209,6 +209,32 @@ sensor:
     name: "Uptime Sensor"
     update_interval: 60s
 
+  - platform: homeassistant
+    id: pump_power_w
+    entity_id: sensor.sonoff_10024a13b7_power
+    filters:
+      - lambda: |-
+          if (isnan(x) || x <= 0.0) {
+            return id(solar_pump).state ? 60.0 : 0.0;
+          }
+          return x;
+
+  - platform: template
+    name: "COP Solar"
+    id: cop_solar
+    unit_of_measurement: ""
+    state_class: measurement
+    update_interval: 10s
+    lambda: |-
+      if (!id(solar_pump).state) return 0.0;
+      float heat = id(kw_solar).state;
+      float power = id(pump_power_w).state / 1000.0;
+      if (power <= 0.0) power = 0.001;
+      return heat / power;
+    filters:
+      - filter_out: nan
+      - throttle: 10s
+
 binary_sensor:
   - platform: homeassistant
     name: "Oscar Motion"
@@ -222,6 +248,20 @@ binary_sensor:
     on_release:
       then:
         - light.turn_off: backlight_light
+  
+  - platform: template
+    id: cop_below_2
+    lambda: |-
+      if (!id(solar_pump).state) return false;
+      if (id(cop_solar).state <= 0.0) return false;
+      return id(cop_solar).state < 2.0;
+
+  - platform: template
+    id: cop_below_3
+    lambda: |-
+      if (!id(solar_pump).state) return false;
+      if (id(cop_solar).state <= 0.0) return false;
+      return id(cop_solar).state < 3.0;
 
 # --- Pump relay output ---
 switch:
@@ -372,36 +412,37 @@ interval:
       - if:
           condition:
             and:
-              - lambda: |-
-                  return ((id(collector_temp).state - id(tank_bottom_temp).state < 1.0) && (id(solar_in).state - id(solar_out).state < 0.5)) || id(tank_top_temp).state >= 75.0;
               - for:
                   time: 60s
                   condition:
                     switch.is_on: solar_pump
+              - or:
+                  - lambda: |-
+                      return ((id(collector_temp).state - id(tank_bottom_temp).state < 2.0)
+                      && (id(solar_in).state - id(solar_out).state < 2.0))
+                      || id(tank_top_temp).state >= 75.0
+                      || id(collector_temp).state < id(tank_bottom_temp).state;
+                  - for:
+                      time: 300s
+                      condition:
+                        binary_sensor.is_on: cop_below_2
+                  - for:
+                      time: 1200s
+                      condition:
+                        binary_sensor.is_on: cop_below_3
           then:
             - switch.turn_off: solar_pump
       - lambda: |-
           float tank_top = id(tank_top_temp).state;
           float solar_panel = id(collector_temp).state;
           float tank_bottom = id(tank_bottom_temp).state;
-          if (solar_panel > id(collector_max).state) {
-            id(collector_max).publish_state(solar_panel);
-          }
-          if (solar_panel < id(collector_min).state) {
-            id(collector_min).publish_state(solar_panel);
-          }
-          if (tank_top > id(tank_top_temp_max).state) {
-            id(tank_top_temp_max).publish_state(tank_top);
-          }
-          if (tank_top < id(tank_top_temp_min).state) {
-            id(tank_top_temp_min).publish_state(tank_top);
-          }
-          if (tank_bottom > id(tank_bottom_temp_max).state) {
-            id(tank_bottom_temp_max).publish_state(tank_bottom);
-          }
-          if (tank_bottom < id(tank_bottom_temp_min).state) {
-            id(tank_bottom_temp_min).publish_state(tank_bottom);
-          }
+          if (solar_panel > id(collector_max).state) id(collector_max).publish_state(solar_panel);
+          if (solar_panel < id(collector_min).state) id(collector_min).publish_state(solar_panel);
+          if (tank_top > id(tank_top_temp_max).state) id(tank_top_temp_max).publish_state(tank_top);
+          if (tank_top < id(tank_top_temp_min).state) id(tank_top_temp_min).publish_state(tank_top);
+          if (tank_bottom > id(tank_bottom_temp_max).state) id(tank_bottom_temp_max).publish_state(tank_bottom);
+          if (tank_bottom < id(tank_bottom_temp_min).state) id(tank_bottom_temp_min).publish_state(tank_bottom);
+          
 time:
   - platform: homeassistant
     id: homeassistant_time
